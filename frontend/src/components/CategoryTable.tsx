@@ -4,13 +4,11 @@ import type { AnalysisCategory } from '../types/index';
 interface CategoryTableProps {
   categoryId: string;
   category: AnalysisCategory;
-  onEvidenceClick: (evidence: string) => void;
 }
 
 const CategoryTable: React.FC<CategoryTableProps> = ({
   categoryId,
   category,
-  onEvidenceClick,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 

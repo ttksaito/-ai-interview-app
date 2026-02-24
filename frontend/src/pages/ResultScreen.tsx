@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { AnalysisResult } from '../types/index';
 import CategoryTable from '../components/CategoryTable';
 import { api } from '../services/api';
@@ -37,9 +37,6 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ sessionId, onRestart }) => 
     fetchAnalysis();
   }, [sessionId]);
 
-  const handleEvidenceClick = (evidence: string) => {
-    // 根拠をクリックしても何もしない（インタビュー記録セクションを削除したため）
-  };
 
   if (isLoading) {
     return (
@@ -99,27 +96,22 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ sessionId, onRestart }) => 
         <CategoryTable
           categoryId="A"
           category={analysisResult.categories.A}
-          onEvidenceClick={handleEvidenceClick}
         />
         <CategoryTable
           categoryId="B"
           category={analysisResult.categories.B}
-          onEvidenceClick={handleEvidenceClick}
         />
         <CategoryTable
           categoryId="C"
           category={analysisResult.categories.C}
-          onEvidenceClick={handleEvidenceClick}
         />
         <CategoryTable
           categoryId="D"
           category={analysisResult.categories.D}
-          onEvidenceClick={handleEvidenceClick}
         />
         <CategoryTable
           categoryId="E"
           category={analysisResult.categories.E}
-          onEvidenceClick={handleEvidenceClick}
         />
       </div>
     </div>
