@@ -6,7 +6,8 @@
     "dev:frontend": "cd frontend && npm run dev",
     "dev:backend": "cd backend && npm run dev",
     "build": "cd frontend && npm install && npm run build",
-    "install:all": "cd frontend && npm install && cd ../backend && npm install && cd ../api && npm install"
+    "install:all": "cd frontend && npm install && cd ../backend && npm install && cd ../api && npm install",
+    "vercel-build": "cd frontend && npm install && npm run build"
   },
   "workspaces": [
     "frontend",
