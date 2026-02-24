@@ -5,8 +5,8 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
-// Import the router from backend
-import interviewRouter from '../backend/src/routes/interview';
+// Import the router from local src directory
+import interviewRouter from './src/routes/interview';
 
 const app = express();
 
