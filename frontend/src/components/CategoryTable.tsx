@@ -95,7 +95,23 @@ const CategoryTable: React.FC<CategoryTableProps> = ({
                         <div className="text-sm text-gray-900">{item.item}</div>
                       </td>
                       <td className="px-6 py-4">
-                        {item.evidence !== '言及なし' ? (
+                        {item.mentions && item.mentions.length > 0 ? (
+                          <div className="space-y-2">
+                            {item.mentions.map((mention, idx) => (
+                              <div key={idx} className="flex items-start gap-2">
+                                <span className="text-xs text-gray-400 mt-0.5 flex-shrink-0">
+                                  #{mention.messageIndex + 1}
+                                </span>
+                                <button
+                                  onClick={() => onEvidenceClick?.(mention.evidence)}
+                                  className="text-sm text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer text-left transition-colors flex-1"
+                                >
+                                  {cleanEvidence(mention.evidence)}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : item.evidence !== '言及なし' ? (
                           <button
                             onClick={() => onEvidenceClick?.(item.evidence)}
                             className="text-sm text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer text-left transition-colors"

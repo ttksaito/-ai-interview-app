@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { ClaudeService } from '../services/claudeService';
 import { AnalysisService } from '../services/analysisService';
-import { InterviewSession, Message } from '../types';
+import { InterviewSession, Message, AnalysisResult } from '../types';
 
 const router = Router();
 
@@ -149,8 +149,11 @@ router.post('/end', async (req: Request, res: Response) => {
 
 // Analyze interview results
 router.post('/analyze', async (req: Request, res: Response) => {
+  let sessionId: string | undefined;
+  let transcript: string | undefined;
+
   try {
-    const { sessionId } = req.body;
+    sessionId = req.body.sessionId;
 
     if (!sessionId) {
       return res.status(400).json({ error: 'sessionId is required' });
@@ -161,32 +164,58 @@ router.post('/analyze', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    // Generate transcript (exclude the initial start command)
-    const transcript = session.chatHistory
-      .filter((msg) => msg.content !== 'インタビューを開始してください。')
-      .map((msg) => {
-        const role = msg.role === 'assistant' ? 'AI インタビュアー' : '回答者';
-        return `${role}: ${msg.content}`;
-      })
-      .join('\n\n');
+    // Count user messages for logging
+    const userMessageCount = session.chatHistory.filter(
+      (msg) => msg.role === 'user' && msg.content !== 'インタビューを開始してください。'
+    ).length;
 
-    // Analyze the transcript
-    const analysisResult = await analysisService.analyzeTranscript(transcript);
+    console.log(`Starting batch analysis for ${userMessageCount} user messages x 5 categories = ${userMessageCount * 5} API calls`);
+
+    // Analyze using the new batch method (processes messages x categories in parallel)
+    // This is much faster than the old single-transcript method and avoids timeout
+    const analysisResult = await Promise.race([
+      analysisService.analyzeMessagesBatch(session.chatHistory),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Analysis timeout')), 25000)
+      ),
+    ]);
+
+    transcript = (analysisResult as AnalysisResult).transcript;
 
     // Save analysis result to session
-    session.analysisResult = analysisResult;
+    session.analysisResult = analysisResult as AnalysisResult;
 
     res.json(analysisResult);
   } catch (error: any) {
-    console.error('Error analyzing interview:', error);
-    res.status(500).json({ error: 'Failed to analyze interview', details: error.message });
+    const errorTimestamp = new Date().toISOString();
+    console.error(`[${errorTimestamp}] Error analyzing interview:`, {
+      sessionId,
+      errorMessage: error.message,
+      errorStack: error.stack,
+      transcriptLength: transcript?.length || 0,
+    });
+
+    // Check if it's a timeout error
+    if (error.message?.includes('timeout') || error.message?.includes('timed out')) {
+      return res.status(504).json({
+        error: 'Analysis timeout',
+        details: 'インタビューの分析に時間がかかりすぎています。インタビューを短くしてもう一度お試しください。',
+        transcriptLength: transcript?.length,
+      });
+    }
+
+    res.status(500).json({
+      error: 'Failed to analyze interview',
+      details: error.message,
+      transcriptLength: transcript?.length,
+    });
   }
 });
 
 // Get interview transcript
 router.get('/transcript/:sessionId', (req: Request, res: Response) => {
   try {
-    const { sessionId } = req.params;
+    const sessionId = req.params.sessionId as string;
 
     const session = sessions.get(sessionId);
     if (!session) {
@@ -232,7 +261,7 @@ router.get('/history', (req: Request, res: Response) => {
 // Get session by ID (for viewing past results)
 router.get('/session/:sessionId', (req: Request, res: Response) => {
   try {
-    const { sessionId } = req.params;
+    const sessionId = req.params.sessionId as string;
 
     const session = sessions.get(sessionId);
     if (!session) {

@@ -74,7 +74,14 @@ export const api = {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to analyze interview');
+      const errorData = await response.json().catch(() => ({}));
+
+      // Handle timeout specifically
+      if (response.status === 504) {
+        throw new Error('Analysis timed out - interview may be too long');
+      }
+
+      throw new Error(errorData.details || 'Failed to analyze interview');
     }
 
     return response.json();

@@ -10,11 +10,19 @@ export interface AnalysisCategory {
   negativeCount: number;
 }
 
+export interface AnalysisEvidence {
+  messageIndex: number; // Index of the user message (0-based, excluding initial prompt)
+  evaluation: 1 | -1; // 1: positive mention, -1: negative mention
+  evidence: string; // Extracted quote from the message
+  messageContent: string; // Full message content for context
+}
+
 export interface AnalysisItem {
   id: string;
   item: string;
-  evaluation: 1 | -1 | 0;
-  evidence: string;
+  mentions: AnalysisEvidence[]; // List of mentions across all messages
+  evaluation: 1 | -1 | 0; // Overall evaluation
+  evidence: string; // Combined evidence for backward compatibility
 }
 
 export interface AnalysisResult {

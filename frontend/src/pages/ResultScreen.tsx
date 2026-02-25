@@ -24,9 +24,20 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ sessionId, onRestart }) => 
         let result;
         try {
           result = await api.getSessionResult(sessionId);
-        } catch {
+        } catch (sessionErr) {
           // If no existing analysis, create new one
-          result = await api.analyzeInterview(sessionId);
+          try {
+            result = await api.analyzeInterview(sessionId);
+          } catch (analyzeErr: any) {
+            // Check if it's a timeout error
+            if (analyzeErr.message?.includes('timeout') || analyzeErr.message?.includes('timed out')) {
+              setError('分析に時間がかかりすぎています。インタビューが長すぎる可能性があります。もう一度お試しいただくか、短いインタビューで試してみてください。');
+            } else {
+              setError('分析の実行に失敗しました。もう一度お試しください。');
+            }
+            setIsLoading(false);
+            return;
+          }
         }
 
         // Fetch chat history for LINE-style display
