@@ -12,6 +12,18 @@ export interface InterviewSession {
   };
   createdAt: string;
   analysisResult?: AnalysisResult;
+  partialAnalysis?: Map<number, {
+    messageIndex: number;
+    messageContent: string;
+    categories: {
+      [categoryId: string]: Array<{
+        id: string;
+        item: string;
+        evaluation: 0 | 1 | -1;
+        evidence: string;
+      }>;
+    };
+  }>;
 }
 
 export interface AnalysisCategory {

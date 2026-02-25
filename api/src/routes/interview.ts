@@ -147,6 +147,109 @@ router.post('/end', async (req: Request, res: Response) => {
   }
 });
 
+// Analyze a single message (for incremental processing)
+router.post('/analyze-message', async (req: Request, res: Response) => {
+  try {
+    const { sessionId, messageIndex } = req.body;
+
+    if (!sessionId || messageIndex === undefined) {
+      return res.status(400).json({ error: 'sessionId and messageIndex are required' });
+    }
+
+    const session = sessions.get(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Initialize partialAnalysis if not exists
+    if (!session.partialAnalysis) {
+      session.partialAnalysis = new Map();
+    }
+
+    // Get user messages (excluding the initial prompt)
+    const userMessages = session.chatHistory.filter(
+      (msg) => msg.role === 'user' && msg.content !== 'インタビューを開始してください。'
+    );
+
+    if (messageIndex < 0 || messageIndex >= userMessages.length) {
+      return res.status(400).json({ error: 'Invalid messageIndex' });
+    }
+
+    const message = userMessages[messageIndex];
+
+    console.log(`Analyzing message ${messageIndex + 1}/${userMessages.length}`);
+
+    // Analyze the single message
+    const result = await analysisService.analyzeSingleMessage(message.content, messageIndex);
+
+    // Save to session
+    session.partialAnalysis.set(messageIndex, result);
+
+    // Check if all messages have been analyzed
+    const allAnalyzed = session.partialAnalysis.size === userMessages.length;
+
+    res.json({
+      success: true,
+      messageIndex,
+      totalMessages: userMessages.length,
+      analyzedCount: session.partialAnalysis.size,
+      allAnalyzed,
+      result,
+    });
+  } catch (error: any) {
+    console.error('Error analyzing message:', error);
+    res.status(500).json({
+      error: 'Failed to analyze message',
+      details: error.message,
+    });
+  }
+});
+
+// Finalize analysis from partial results
+router.post('/finalize-analysis', async (req: Request, res: Response) => {
+  try {
+    const { sessionId } = req.body;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    const session = sessions.get(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    if (!session.partialAnalysis || session.partialAnalysis.size === 0) {
+      return res.status(400).json({ error: 'No partial analysis results found' });
+    }
+
+    console.log(`Finalizing analysis from ${session.partialAnalysis.size} partial results`);
+
+    // Convert Map to Array
+    const partialResults = Array.from(session.partialAnalysis.values());
+
+    // Aggregate into final result
+    const analysisResult = analysisService.aggregatePartialResults(
+      partialResults,
+      session.chatHistory,
+    );
+
+    // Save to session
+    session.analysisResult = analysisResult;
+
+    // Clear partial results to save memory
+    session.partialAnalysis = undefined;
+
+    res.json(analysisResult);
+  } catch (error: any) {
+    console.error('Error finalizing analysis:', error);
+    res.status(500).json({
+      error: 'Failed to finalize analysis',
+      details: error.message,
+    });
+  }
+});
+
 // Analyze interview results
 router.post('/analyze', async (req: Request, res: Response) => {
   let sessionId: string | undefined;

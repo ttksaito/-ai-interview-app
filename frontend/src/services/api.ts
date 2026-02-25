@@ -87,6 +87,49 @@ export const api = {
     return response.json();
   },
 
+  async analyzeMessage(
+    sessionId: string,
+    messageIndex: number,
+  ): Promise<{
+    success: boolean;
+    messageIndex: number;
+    totalMessages: number;
+    analyzedCount: number;
+    allAnalyzed: boolean;
+  }> {
+    const response = await fetch(`${API_BASE_URL}/interview/analyze-message`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sessionId, messageIndex }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.details || 'Failed to analyze message');
+    }
+
+    return response.json();
+  },
+
+  async finalizeAnalysis(sessionId: string): Promise<AnalysisResult> {
+    const response = await fetch(`${API_BASE_URL}/interview/finalize-analysis`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sessionId }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.details || 'Failed to finalize analysis');
+    }
+
+    return response.json();
+  },
+
   async getTranscript(sessionId: string): Promise<{ transcript: string; chatHistory: Message[] }> {
     const response = await fetch(`${API_BASE_URL}/interview/transcript/${sessionId}`);
 

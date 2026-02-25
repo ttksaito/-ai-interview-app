@@ -207,6 +207,143 @@ export class AnalysisService {
   }
 
   /**
+   * Analyze a single message across all categories
+   */
+  async analyzeSingleMessage(
+    messageContent: string,
+    messageIndex: number,
+  ): Promise<{
+    messageIndex: number;
+    messageContent: string;
+    categories: {
+      [categoryId: string]: Array<{
+        id: string;
+        item: string;
+        evaluation: 0 | 1 | -1;
+        evidence: string;
+      }>;
+    };
+  }> {
+    console.log(`Analyzing message ${messageIndex} across 5 categories`);
+
+    // Create analysis tasks for all 5 categories
+    const categoryIds = ['A', 'B', 'C', 'D', 'E'] as const;
+    const categoryResults: any = {};
+
+    // Process categories with limited concurrency (2 at a time)
+    for (let i = 0; i < categoryIds.length; i += 2) {
+      const batch = categoryIds.slice(i, i + 2);
+      const batchResults = await Promise.all(
+        batch.map(async (categoryId) => {
+          const results = await this.analyzeCategoryForMessage(messageContent, categoryId);
+          return { categoryId, results };
+        }),
+      );
+
+      for (const { categoryId, results } of batchResults) {
+        categoryResults[categoryId] = results;
+      }
+
+      // Small delay between batches
+      if (i + 2 < categoryIds.length) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+
+    return {
+      messageIndex,
+      messageContent,
+      categories: categoryResults,
+    };
+  }
+
+  /**
+   * Aggregate partial analysis results into a final AnalysisResult
+   */
+  aggregatePartialResults(
+    partialResults: Array<{
+      messageIndex: number;
+      messageContent: string;
+      categories: {
+        [categoryId: string]: Array<{
+          id: string;
+          item: string;
+          evaluation: 0 | 1 | -1;
+          evidence: string;
+        }>;
+      };
+    }>,
+    allMessages: Message[],
+  ): AnalysisResult {
+    console.log(`Aggregating ${partialResults.length} partial analysis results`);
+
+    // Initialize all items
+    const itemMap = new Map<string, AnalysisItem>();
+
+    for (const [categoryId, category] of Object.entries(CATEGORIES)) {
+      category.items.forEach((itemText, idx) => {
+        const itemId = `${categoryId}${idx + 1}`;
+        itemMap.set(itemId, {
+          id: itemId,
+          item: itemText,
+          mentions: [],
+          evaluation: 0,
+          evidence: '言及なし',
+        });
+      });
+    }
+
+    // Aggregate mentions from all partial results
+    for (const partial of partialResults) {
+      for (const [categoryId, results] of Object.entries(partial.categories)) {
+        for (const result of results) {
+          if (result.evaluation !== 0) {
+            const item = itemMap.get(result.id);
+            if (item) {
+              item.mentions.push({
+                messageIndex: partial.messageIndex,
+                evaluation: result.evaluation as 1 | -1,
+                evidence: result.evidence,
+                messageContent: partial.messageContent,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // Calculate overall evaluation and combined evidence for each item
+    for (const item of itemMap.values()) {
+      if (item.mentions.length > 0) {
+        const hasPositive = item.mentions.some((m) => m.evaluation === 1);
+        const hasNegative = item.mentions.some((m) => m.evaluation === -1);
+        item.evaluation = hasPositive ? 1 : hasNegative ? -1 : 0;
+        item.evidence = item.mentions.map((m) => m.evidence).join(' / ');
+      }
+    }
+
+    // Build category structure
+    const categories = {
+      A: this.createCategoryFromItems('A', '仕事への意味・充実感', itemMap),
+      B: this.createCategoryFromItems('B', '人間関係・つながりの感覚', itemMap),
+      C: this.createCategoryFromItems('C', '自己成長・学びへの志向', itemMap),
+      D: this.createCategoryFromItems('D', '人生全体の意味・目的感', itemMap),
+      E: this.createCategoryFromItems('E', '日常の喜び・主観的幸福感', itemMap),
+    };
+
+    return {
+      categories,
+      transcript: allMessages
+        .filter((msg) => msg.content !== 'インタビューを開始してください。')
+        .map((msg) => {
+          const role = msg.role === 'assistant' ? 'AI インタビュアー' : '回答者';
+          return `${role}: ${msg.content}`;
+        })
+        .join('\n\n'),
+    };
+  }
+
+  /**
    * Analyze all user messages across all categories with controlled parallel processing
    */
   async analyzeMessagesBatch(messages: Message[]): Promise<AnalysisResult> {

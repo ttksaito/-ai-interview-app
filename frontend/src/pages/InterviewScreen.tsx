@@ -20,6 +20,8 @@ const InterviewScreen: React.FC<InterviewScreenProps> = ({
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isActive, setIsActive] = useState(true);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyzingProgress, setAnalyzingProgress] = useState({ current: 0, total: 0 });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -76,23 +78,61 @@ const InterviewScreen: React.FC<InterviewScreenProps> = ({
       if (!response.isActive) {
         setIsActive(false);
 
-        // Start analysis in the background
-        console.log('Interview ended automatically, starting analysis...');
-        api.analyzeInterview(sessionId).catch((error) => {
-          console.error('Background analysis failed:', error);
-          // Don't block navigation even if analysis fails
-        });
-
-        // Auto-navigate to results after a short delay
-        setTimeout(() => {
-          onComplete();
-        }, 2000);
+        // Start incremental analysis
+        console.log('Interview ended automatically, starting incremental analysis...');
+        analyzeIncrementally()
+          .then(() => {
+            // Navigate to results after analysis completes
+            setTimeout(() => {
+              onComplete();
+            }, 1000);
+          })
+          .catch((error) => {
+            console.error('Incremental analysis failed:', error);
+            // Navigate anyway even if analysis fails
+            setTimeout(() => {
+              onComplete();
+            }, 1000);
+          });
       }
     } catch (error) {
       console.error('Error sending message:', error);
       alert('メッセージの送信に失敗しました。もう一度お試しください。');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const analyzeIncrementally = async () => {
+    setIsAnalyzing(true);
+
+    try {
+      // Get transcript to determine message count
+      const { chatHistory } = await api.getTranscript(sessionId);
+      const userMessageCount = chatHistory.filter(
+        (msg) => msg.role === 'user' && msg.content !== 'インタビューを開始してください。'
+      ).length;
+
+      console.log(`Starting incremental analysis for ${userMessageCount} messages`);
+      setAnalyzingProgress({ current: 0, total: userMessageCount });
+
+      // Analyze each message one by one
+      for (let i = 0; i < userMessageCount; i++) {
+        console.log(`Analyzing message ${i + 1}/${userMessageCount}`);
+        await api.analyzeMessage(sessionId, i);
+        setAnalyzingProgress({ current: i + 1, total: userMessageCount });
+      }
+
+      // Finalize the analysis
+      console.log('Finalizing analysis...');
+      await api.finalizeAnalysis(sessionId);
+
+      console.log('Analysis completed successfully');
+    } catch (error) {
+      console.error('Incremental analysis failed:', error);
+      throw error;
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -108,14 +148,11 @@ const InterviewScreen: React.FC<InterviewScreenProps> = ({
       await api.endInterview(sessionId);
       setIsActive(false);
 
-      // Start analysis in the background
-      console.log('Starting analysis...');
-      api.analyzeInterview(sessionId).catch((error) => {
-        console.error('Background analysis failed:', error);
-        // Don't block navigation even if analysis fails
-      });
+      // Start incremental analysis
+      console.log('Starting incremental analysis...');
+      await analyzeIncrementally();
 
-      // Navigate to results (analysis will continue in background)
+      // Navigate to results
       onComplete();
     } catch (error) {
       console.error('Error ending interview:', error);
@@ -203,8 +240,33 @@ const InterviewScreen: React.FC<InterviewScreenProps> = ({
             </>
           ) : (
             <div className="text-center py-4">
-              <p className="text-gray-600 mb-3">インタビューが終了しました</p>
-              <p className="text-sm text-gray-500">分析結果画面に移動します...</p>
+              {isAnalyzing ? (
+                <>
+                  <p className="text-gray-600 mb-3">インタビューを分析中...</p>
+                  <div className="max-w-md mx-auto mb-2">
+                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                      <div
+                        className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"
+                        style={{
+                          width: `${
+                            analyzingProgress.total > 0
+                              ? (analyzingProgress.current / analyzingProgress.total) * 100
+                              : 0
+                          }%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    {analyzingProgress.current} / {analyzingProgress.total} メッセージ分析完了
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-gray-600 mb-3">インタビューが終了しました</p>
+                  <p className="text-sm text-gray-500">分析結果画面に移動します...</p>
+                </>
+              )}
             </div>
           )}
         </div>
