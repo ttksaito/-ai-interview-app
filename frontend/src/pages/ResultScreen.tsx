@@ -20,35 +20,61 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ sessionId, onRestart }) => 
     const fetchAnalysis = async () => {
       try {
         setIsLoading(true);
-        // Try to get existing analysis first
+
+        // Poll for analysis result (it may still be processing in background)
         let result;
-        try {
-          result = await api.getSessionResult(sessionId);
-        } catch (sessionErr) {
-          // If no existing analysis, create new one
+        let attempts = 0;
+        const maxAttempts = 30; // Poll for up to 30 seconds
+
+        while (attempts < maxAttempts) {
           try {
-            result = await api.analyzeInterview(sessionId);
-          } catch (analyzeErr: any) {
-            // Check if it's a timeout error
-            if (analyzeErr.message?.includes('timeout') || analyzeErr.message?.includes('timed out')) {
-              setError('分析に時間がかかりすぎています。インタビューが長すぎる可能性があります。もう一度お試しいただくか、短いインタビューで試してみてください。');
-            } else {
-              setError('分析の実行に失敗しました。もう一度お試しください。');
+            result = await api.getSessionResult(sessionId);
+            // If we got a result, break out of the loop
+            break;
+          } catch (sessionErr) {
+            // Analysis not ready yet, wait and try again
+            if (attempts === 0) {
+              console.log('Analysis not ready yet, polling...');
             }
-            setIsLoading(false);
-            return;
+
+            attempts++;
+
+            if (attempts >= maxAttempts) {
+              // If polling failed, try to start analysis ourselves
+              console.log('Polling timeout, starting analysis manually...');
+              try {
+                result = await api.analyzeInterview(sessionId);
+              } catch (analyzeErr: any) {
+                // Check if it's a timeout error
+                if (analyzeErr.message?.includes('timeout') || analyzeErr.message?.includes('timed out')) {
+                  setError('分析に時間がかかりすぎています。インタビューが長すぎる可能性があります。もう一度お試しいただくか、短いインタビューで試してみてください。');
+                } else {
+                  setError('分析の実行に失敗しました。もう一度お試しください。');
+                }
+                setIsLoading(false);
+                return;
+              }
+              break;
+            }
+
+            // Wait 1 second before next poll
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
         }
 
         // Fetch chat history for LINE-style display
-        try {
-          const { chatHistory } = await api.getTranscript(sessionId);
-          result.messages = chatHistory;
-        } catch (err) {
-          console.error('Error fetching chat history:', err);
-        }
+        if (result) {
+          try {
+            const { chatHistory } = await api.getTranscript(sessionId);
+            result.messages = chatHistory;
+          } catch (err) {
+            console.error('Error fetching chat history:', err);
+          }
 
-        setAnalysisResult(result);
+          setAnalysisResult(result);
+        } else {
+          setError('分析結果が取得できませんでした。');
+        }
       } catch (err) {
         console.error('Error fetching analysis:', err);
         setError('分析結果の取得に失敗しました。');
@@ -103,6 +129,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ sessionId, onRestart }) => 
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
           <p className="text-gray-600">分析中...</p>
           <p className="text-sm text-gray-500 mt-2">AIがインタビュー結果を分析しています</p>
+          <p className="text-xs text-gray-400 mt-3">メッセージごとに詳細に分析しているため、少し時間がかかります</p>
         </div>
       </div>
     );

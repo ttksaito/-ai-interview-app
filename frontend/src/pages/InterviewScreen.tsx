@@ -75,6 +75,14 @@ const InterviewScreen: React.FC<InterviewScreenProps> = ({
       // Check if interview ended
       if (!response.isActive) {
         setIsActive(false);
+
+        // Start analysis in the background
+        console.log('Interview ended automatically, starting analysis...');
+        api.analyzeInterview(sessionId).catch((error) => {
+          console.error('Background analysis failed:', error);
+          // Don't block navigation even if analysis fails
+        });
+
         // Auto-navigate to results after a short delay
         setTimeout(() => {
           onComplete();
@@ -93,13 +101,26 @@ const InterviewScreen: React.FC<InterviewScreenProps> = ({
       return;
     }
 
+    setIsLoading(true);
+
     try {
+      // End the interview
       await api.endInterview(sessionId);
       setIsActive(false);
+
+      // Start analysis in the background
+      console.log('Starting analysis...');
+      api.analyzeInterview(sessionId).catch((error) => {
+        console.error('Background analysis failed:', error);
+        // Don't block navigation even if analysis fails
+      });
+
+      // Navigate to results (analysis will continue in background)
       onComplete();
     } catch (error) {
       console.error('Error ending interview:', error);
       alert('インタビューの終了に失敗しました。');
+      setIsLoading(false);
     }
   };
 
