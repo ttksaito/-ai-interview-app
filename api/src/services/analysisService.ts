@@ -102,57 +102,112 @@ export class AnalysisService {
   }
 
   /**
-   * Analyze a single message for a specific category
+   * Retry logic with exponential backoff
+   */
+  private async retryWithBackoff<T>(
+    fn: () => Promise<T>,
+    maxRetries: number = 3,
+    initialDelay: number = 1000,
+  ): Promise<T> {
+    let lastError: any;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error: any) {
+        lastError = error;
+
+        // Check if it's a rate limit error
+        const isRateLimit = error.message?.includes('rate_limit') || error.status === 429;
+
+        if (!isRateLimit || attempt === maxRetries - 1) {
+          throw error;
+        }
+
+        // Exponential backoff: 1s, 2s, 4s
+        const delay = initialDelay * Math.pow(2, attempt);
+        console.log(`Rate limit hit, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+    throw lastError;
+  }
+
+  /**
+   * Analyze a single message for a specific category with retry logic
    */
   async analyzeCategoryForMessage(
     messageContent: string,
     categoryId: 'A' | 'B' | 'C' | 'D' | 'E',
   ): Promise<{ id: string; item: string; evaluation: 0 | 1 | -1; evidence: string }[]> {
-    const category = CATEGORIES[categoryId];
-    const itemsText = category.items.join('\n');
+    return this.retryWithBackoff(async () => {
+      const category = CATEGORIES[categoryId];
+      const itemsText = category.items.join('\n');
 
-    const prompt = [
-      ANALYSIS_PROMPT,
-      '',
-      `【${categoryId}】${category.name}`,
-      itemsText,
-      '',
-      '**出力形式（必ずこの形式のJSONで出力してください）:**',
-      '```json',
-      '[',
-      `  { "id": "${categoryId}1", "item": "項目の要約", "evaluation": 0, "evidence": "言及なし" },`,
-      `  { "id": "${categoryId}2", "item": "項目の要約", "evaluation": 1, "evidence": "【「実際の発言」と発言】" }`,
-      ']',
-      '```',
-      '',
-      '回答者の発言:',
-      messageContent,
-    ].join('\n');
+      const prompt = [
+        ANALYSIS_PROMPT,
+        '',
+        `【${categoryId}】${category.name}`,
+        itemsText,
+        '',
+        '**出力形式（必ずこの形式のJSONで出力してください）:**',
+        '```json',
+        '[',
+        `  { "id": "${categoryId}1", "item": "項目の要約", "evaluation": 0, "evidence": "言及なし" },`,
+        `  { "id": "${categoryId}2", "item": "項目の要約", "evaluation": 1, "evidence": "【「実際の発言」と発言】" }`,
+        ']',
+        '```',
+        '',
+        '回答者の発言:',
+        messageContent,
+      ].join('\n');
 
-    const response = await this.client.messages.create({
-      model: this.model,
-      max_tokens: 2048,
-      messages: [{ role: 'user', content: prompt }],
+      const response = await this.client.messages.create({
+        model: this.model,
+        max_tokens: 2048,
+        messages: [{ role: 'user', content: prompt }],
+      });
+
+      const textContent = response.content.find((block) => block.type === 'text');
+      const responseText = textContent && 'text' in textContent ? textContent.text : '';
+
+      // Extract JSON from code block
+      const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
+      const jsonText = jsonMatch ? jsonMatch[1] : responseText;
+
+      try {
+        return JSON.parse(jsonText);
+      } catch (error) {
+        console.error('Failed to parse category analysis:', error);
+        console.error('Response text:', responseText);
+        throw new Error(`Failed to parse category ${categoryId} analysis`);
+      }
     });
-
-    const textContent = response.content.find((block) => block.type === 'text');
-    const responseText = textContent && 'text' in textContent ? textContent.text : '';
-
-    // Extract JSON from code block
-    const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
-    const jsonText = jsonMatch ? jsonMatch[1] : responseText;
-
-    try {
-      return JSON.parse(jsonText);
-    } catch (error) {
-      console.error('Failed to parse category analysis:', error);
-      console.error('Response text:', responseText);
-      throw new Error(`Failed to parse category ${categoryId} analysis`);
-    }
   }
 
   /**
-   * Analyze all user messages across all categories with parallel processing
+   * Process promises in batches with limited concurrency
+   */
+  private async processBatch<T>(
+    items: T[],
+    processor: (item: T) => Promise<any>,
+    concurrency: number,
+  ): Promise<any[]> {
+    const results: any[] = [];
+    for (let i = 0; i < items.length; i += concurrency) {
+      const batch = items.slice(i, i + concurrency);
+      const batchResults = await Promise.all(batch.map(processor));
+      results.push(...batchResults);
+
+      // Small delay between batches to avoid rate limiting
+      if (i + concurrency < items.length) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Analyze all user messages across all categories with controlled parallel processing
    */
   async analyzeMessagesBatch(messages: Message[]): Promise<AnalysisResult> {
     // Extract user messages (excluding the initial prompt)
@@ -162,29 +217,35 @@ export class AnalysisService {
 
     console.log(`Analyzing ${userMessages.length} user messages across 5 categories`);
 
-    // Process all messages × categories in parallel
-    const analysisPromises: Promise<{
-      messageIndex: number;
+    // Create all analysis tasks
+    const analysisTasks: Array<{
+      msg: Message;
+      index: number;
       categoryId: 'A' | 'B' | 'C' | 'D' | 'E';
-      results: { id: string; item: string; evaluation: 0 | 1 | -1; evidence: string }[];
-      messageContent: string;
-    }>[] = [];
+    }> = [];
 
     for (const { msg, index } of userMessages) {
       for (const categoryId of ['A', 'B', 'C', 'D', 'E'] as const) {
-        analysisPromises.push(
-          this.analyzeCategoryForMessage(msg.content, categoryId).then((results) => ({
-            messageIndex: index,
-            categoryId,
-            results,
-            messageContent: msg.content,
-          })),
-        );
+        analysisTasks.push({ msg, index, categoryId });
       }
     }
 
-    // Wait for all analyses to complete
-    const allAnalyses = await Promise.all(analysisPromises);
+    console.log(`Total API calls: ${analysisTasks.length}, processing with concurrency limit of 3`);
+
+    // Process with limited concurrency (3 at a time to avoid rate limits)
+    const allAnalyses = await this.processBatch(
+      analysisTasks,
+      async (task) => {
+        const results = await this.analyzeCategoryForMessage(task.msg.content, task.categoryId);
+        return {
+          messageIndex: task.index,
+          categoryId: task.categoryId,
+          results,
+          messageContent: task.msg.content,
+        };
+      },
+      3, // Max 3 concurrent requests
+    );
 
     // Aggregate results by item
     const itemMap = new Map<string, AnalysisItem>();
