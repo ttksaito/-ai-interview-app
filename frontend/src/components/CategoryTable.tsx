@@ -72,11 +72,11 @@ const CategoryTable: React.FC<CategoryTableProps> = ({
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
-                    評価
-                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     項目
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                    評価
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     根拠
@@ -84,15 +84,19 @@ const CategoryTable: React.FC<CategoryTableProps> = ({
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {category.items
-                  .filter((item) => item.evaluation !== 0)
-                  .map((item) => (
-                    <tr key={item.id} className="hover:bg-gray-50">
+                {category.items.map((item) => {
+                  const hasNoMention = item.evaluation === 0;
+                  const rowClass = hasNoMention ? 'opacity-40' : '';
+
+                  return (
+                    <tr key={item.id} className={`hover:bg-gray-50 ${rowClass}`}>
+                      <td className="px-6 py-4">
+                        <div className={`text-sm ${hasNoMention ? 'text-gray-400' : 'text-gray-900'}`}>
+                          {item.item}
+                        </div>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {getEvaluationBadge(item.evaluation)}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900">{item.item}</div>
                       </td>
                       <td className="px-6 py-4">
                         {item.mentions && item.mentions.length > 0 ? (
@@ -119,11 +123,14 @@ const CategoryTable: React.FC<CategoryTableProps> = ({
                             {cleanEvidence(item.evidence)}
                           </button>
                         ) : (
-                          <span className="text-sm text-gray-500">{item.evidence}</span>
+                          <span className={`text-sm ${hasNoMention ? 'text-gray-300' : 'text-gray-500'}`}>
+                            {item.evidence}
+                          </span>
                         )}
                       </td>
                     </tr>
-                  ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
