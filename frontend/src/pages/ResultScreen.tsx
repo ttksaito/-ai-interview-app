@@ -87,8 +87,12 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ sessionId, onRestart }) => 
   }, [sessionId]);
 
   const handleEvidenceClick = (evidence: string) => {
-    // Remove the formatting markers 【「 and 」と発言】
-    const cleanText = evidence.replace(/【「(.+?)」と発言】/g, '$1');
+    // Remove all formatting markers to get clean text
+    const cleanText = evidence
+      .replace(/【「(.+?)」と発言[^】]*】/g, '$1')
+      .replace(/【「(.+?)」】/g, '$1')
+      .replace(/「(.+?)」/g, '$1')
+      .replace(/【(.+?)】/g, '$1');
 
     if (!cleanText || cleanText === '言及なし' || !analysisResult?.messages) {
       return;

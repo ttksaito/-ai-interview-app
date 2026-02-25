@@ -25,8 +25,12 @@ const CategoryTable: React.FC<CategoryTableProps> = ({
   };
 
   const cleanEvidence = (evidence: string) => {
-    // Remove 【「 and 」と発言】
-    return evidence.replace(/【「(.+?)」と発言】/g, '$1');
+    // Remove all formatting markers: 【「」と発言】, 【】, 「」
+    return evidence
+      .replace(/【「(.+?)」と発言[^】]*】/g, '$1')  // 【「text」と発言(...)】 -> text
+      .replace(/【「(.+?)」】/g, '$1')              // 【「text」】 -> text
+      .replace(/「(.+?)」/g, '$1')                 // 「text」 -> text
+      .replace(/【(.+?)】/g, '$1');                // 【text】 -> text
   };
 
   return (

@@ -89,8 +89,8 @@ const ANALYSIS_PROMPT = `以下の回答者の発言を分析し、指定され�
 - 言及がなければ「0」
 
 **重要な指示:**
-- 根拠には必ず回答者の実際の発言を忠実に抽出すること
-- 根拠がある場合は、「【「回答者の実際の発言」と発言】」という形式で記載すること
+- 根拠には必ず回答者の実際の発言を忠実にそのまま抽出すること
+- 根拠は発言をそのまま引用し、余計な説明や装飾を加えないこと
 - 言及がない場合は「言及なし」と記載すること`;
 
 export class AnalysisService {
@@ -333,9 +333,14 @@ export class AnalysisService {
         '```json',
         '[',
         `  { "id": "${categoryId}1", "item": "項目の要約", "evaluation": 0, "evidence": "言及なし" },`,
-        `  { "id": "${categoryId}2", "item": "項目の要約", "evaluation": 1, "evidence": "【「最新の回答からの実際の発言」と発言】" }`,
+        `  { "id": "${categoryId}2", "item": "項目の要約", "evaluation": 1, "evidence": "最新の回答からの実際の発言" }`,
         ']',
         '```',
+        '',
+        '**evidence フィールドの記載ルール:**',
+        '- 発言をそのまま引用する（【「」と発言】などの装飾は不要）',
+        '- 括弧や説明文を追加しない',
+        '- 例: "子育てが生きがいです" のようにシンプルに記載',
       ].join('\n');
 
       const response = await this.client.messages.create({
