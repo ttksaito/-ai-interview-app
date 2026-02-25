@@ -207,10 +207,10 @@ export class AnalysisService {
   }
 
   /**
-   * Analyze a single message across all categories
+   * Analyze a single message across all categories with full conversation context
    */
   async analyzeSingleMessage(
-    messageContent: string,
+    chatHistory: Message[],
     messageIndex: number,
   ): Promise<{
     messageIndex: number;
@@ -224,7 +224,46 @@ export class AnalysisService {
       }>;
     };
   }> {
-    console.log(`Analyzing message ${messageIndex} across 5 categories`);
+    // Get user messages (excluding the initial prompt)
+    const userMessages = chatHistory.filter(
+      (msg) => msg.role === 'user' && msg.content !== 'インタビューを開始してください。'
+    );
+
+    if (messageIndex < 0 || messageIndex >= userMessages.length) {
+      throw new Error('Invalid messageIndex');
+    }
+
+    const targetMessage = userMessages[messageIndex];
+
+    console.log(`Analyzing message ${messageIndex + 1}/${userMessages.length} with full context`);
+
+    // Build conversation context up to this message
+    const contextMessages: Message[] = [];
+    let userCount = 0;
+
+    for (const msg of chatHistory) {
+      if (msg.content === 'インタビューを開始してください。') {
+        continue;
+      }
+
+      // Include messages up to and including the target message
+      contextMessages.push(msg);
+
+      if (msg.role === 'user') {
+        if (userCount === messageIndex) {
+          break;
+        }
+        userCount++;
+      }
+    }
+
+    // Create conversation context string
+    const conversationContext = contextMessages
+      .map((msg) => {
+        const role = msg.role === 'assistant' ? 'AI インタビュアー' : '回答者';
+        return `${role}: ${msg.content}`;
+      })
+      .join('\n\n');
 
     // Create analysis tasks for all 5 categories
     const categoryIds = ['A', 'B', 'C', 'D', 'E'] as const;
@@ -235,7 +274,11 @@ export class AnalysisService {
       const batch = categoryIds.slice(i, i + 2);
       const batchResults = await Promise.all(
         batch.map(async (categoryId) => {
-          const results = await this.analyzeCategoryForMessage(messageContent, categoryId);
+          const results = await this.analyzeCategoryWithContext(
+            conversationContext,
+            targetMessage.content,
+            categoryId
+          );
           return { categoryId, results };
         }),
       );
@@ -252,9 +295,65 @@ export class AnalysisService {
 
     return {
       messageIndex,
-      messageContent,
+      messageContent: targetMessage.content,
       categories: categoryResults,
     };
+  }
+
+  /**
+   * Analyze a category for a message with conversation context
+   */
+  async analyzeCategoryWithContext(
+    conversationContext: string,
+    targetMessageContent: string,
+    categoryId: 'A' | 'B' | 'C' | 'D' | 'E',
+  ): Promise<{ id: string; item: string; evaluation: 0 | 1 | -1; evidence: string }[]> {
+    return this.retryWithBackoff(async () => {
+      const category = CATEGORIES[categoryId];
+      const itemsText = category.items.join('\n');
+
+      const prompt = [
+        ANALYSIS_PROMPT,
+        '',
+        `【${categoryId}】${category.name}`,
+        itemsText,
+        '',
+        '**会話の文脈:**',
+        conversationContext,
+        '',
+        '**上記の会話の流れを踏まえて、最新の回答者の発言を分析してください:**',
+        `「${targetMessageContent}」`,
+        '',
+        '**出力形式（必ずこの形式のJSONで出力してください）:**',
+        '```json',
+        '[',
+        `  { "id": "${categoryId}1", "item": "項目の要約", "evaluation": 0, "evidence": "言及なし" },`,
+        `  { "id": "${categoryId}2", "item": "項目の要約", "evaluation": 1, "evidence": "【「実際の発言」と発言】" }`,
+        ']',
+        '```',
+      ].join('\n');
+
+      const response = await this.client.messages.create({
+        model: this.model,
+        max_tokens: 2048,
+        messages: [{ role: 'user', content: prompt }],
+      });
+
+      const textContent = response.content.find((block) => block.type === 'text');
+      const responseText = textContent && 'text' in textContent ? textContent.text : '';
+
+      // Extract JSON from code block
+      const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
+      const jsonText = jsonMatch ? jsonMatch[1] : responseText;
+
+      try {
+        return JSON.parse(jsonText);
+      } catch (error) {
+        console.error('Failed to parse category analysis:', error);
+        console.error('Response text:', responseText);
+        throw new Error(`Failed to parse category ${categoryId} analysis`);
+      }
+    });
   }
 
   /**

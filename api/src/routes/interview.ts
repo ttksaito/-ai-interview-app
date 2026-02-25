@@ -175,12 +175,10 @@ router.post('/analyze-message', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid messageIndex' });
     }
 
-    const message = userMessages[messageIndex];
+    console.log(`Analyzing message ${messageIndex + 1}/${userMessages.length} with full conversation context`);
 
-    console.log(`Analyzing message ${messageIndex + 1}/${userMessages.length}`);
-
-    // Analyze the single message
-    const result = await analysisService.analyzeSingleMessage(message.content, messageIndex);
+    // Analyze the single message with full conversation context
+    const result = await analysisService.analyzeSingleMessage(session.chatHistory, messageIndex);
 
     // Save to session
     session.partialAnalysis.set(messageIndex, result);
