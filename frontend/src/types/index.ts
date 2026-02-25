@@ -26,6 +26,7 @@ export interface AnalysisResult {
     E: AnalysisCategory;
   };
   transcript: string;
+  messages?: Message[];
 }
 
 export interface SessionHistory {

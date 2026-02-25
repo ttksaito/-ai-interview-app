@@ -4,11 +4,13 @@ import type { AnalysisCategory } from '../types/index';
 interface CategoryTableProps {
   categoryId: string;
   category: AnalysisCategory;
+  onEvidenceClick?: (evidence: string) => void;
 }
 
 const CategoryTable: React.FC<CategoryTableProps> = ({
   categoryId,
   category,
+  onEvidenceClick,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -94,9 +96,12 @@ const CategoryTable: React.FC<CategoryTableProps> = ({
                       </td>
                       <td className="px-6 py-4">
                         {item.evidence !== '言及なし' ? (
-                          <span className="text-sm text-gray-700">
+                          <button
+                            onClick={() => onEvidenceClick?.(item.evidence)}
+                            className="text-sm text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer text-left transition-colors"
+                          >
                             {cleanEvidence(item.evidence)}
-                          </span>
+                          </button>
                         ) : (
                           <span className="text-sm text-gray-500">{item.evidence}</span>
                         )}
