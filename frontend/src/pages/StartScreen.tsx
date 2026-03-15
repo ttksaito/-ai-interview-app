@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import type { SessionHistory } from '../types/index';
+import type { SessionHistory, AnalysisResult } from '../types/index';
 import { api } from '../services/api';
+import { sampleData } from '../data/sampleData';
 
 interface StartScreenProps {
   onStart: () => void;
   onViewHistory: (sessionId: string) => void;
+  onViewSample: (data: AnalysisResult) => void;
 }
 
-const StartScreen: React.FC<StartScreenProps> = ({ onStart, onViewHistory }) => {
+const StartScreen: React.FC<StartScreenProps> = ({ onStart, onViewHistory, onViewSample }) => {
   const [history, setHistory] = useState<SessionHistory[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
@@ -98,6 +100,24 @@ const StartScreen: React.FC<StartScreenProps> = ({ onStart, onViewHistory }) => 
               途中で中断することもできます。
             </p>
           </div>
+        </div>
+
+        <div className="bg-purple-50 border-l-4 border-purple-500 p-4 rounded-r-lg mb-6">
+          <h3 className="font-semibold text-gray-800 mb-2 flex items-center">
+            <svg className="w-5 h-5 mr-2 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+            </svg>
+            サンプルデータを見る
+          </h3>
+          <p className="text-gray-700 leading-relaxed mb-3">
+            実際のインタビュー結果のサンプルを確認できます。どのような分析が行われるか事前に確認したい方はこちらをご覧ください。
+          </p>
+          <button
+            onClick={() => onViewSample(sampleData)}
+            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-md"
+          >
+            サンプル分析結果を見る
+          </button>
         </div>
 
         <button

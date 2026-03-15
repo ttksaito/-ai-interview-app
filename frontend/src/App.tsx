@@ -3,6 +3,7 @@ import StartScreen from './pages/StartScreen';
 import InterviewScreen from './pages/InterviewScreen';
 import ResultScreen from './pages/ResultScreen';
 import { api } from './services/api';
+import type { AnalysisResult } from './types/index';
 
 type AppScreen = 'start' | 'interview' | 'result';
 
@@ -10,12 +11,14 @@ function App() {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('start');
   const [sessionId, setSessionId] = useState<string>('');
   const [initialMessage, setInitialMessage] = useState<string>('');
+  const [sampleData, setSampleData] = useState<AnalysisResult | null>(null);
 
   const handleStartInterview = async () => {
     try {
       const response = await api.startInterview();
       setSessionId(response.sessionId);
       setInitialMessage(response.message);
+      setSampleData(null);
       setCurrentScreen('interview');
     } catch (error) {
       console.error('Error starting interview:', error);
@@ -24,17 +27,26 @@ function App() {
   };
 
   const handleInterviewComplete = () => {
+    setSampleData(null);
     setCurrentScreen('result');
   };
 
   const handleViewHistory = (historySessionId: string) => {
     setSessionId(historySessionId);
+    setSampleData(null);
+    setCurrentScreen('result');
+  };
+
+  const handleViewSample = (data: AnalysisResult) => {
+    setSampleData(data);
+    setSessionId('');
     setCurrentScreen('result');
   };
 
   const handleRestart = () => {
     setSessionId('');
     setInitialMessage('');
+    setSampleData(null);
     setCurrentScreen('start');
   };
 
@@ -44,6 +56,7 @@ function App() {
         <StartScreen
           onStart={handleStartInterview}
           onViewHistory={handleViewHistory}
+          onViewSample={handleViewSample}
         />
       )}
       {currentScreen === 'interview' && sessionId && (
@@ -53,8 +66,12 @@ function App() {
           onComplete={handleInterviewComplete}
         />
       )}
-      {currentScreen === 'result' && sessionId && (
-        <ResultScreen sessionId={sessionId} onRestart={handleRestart} />
+      {currentScreen === 'result' && (
+        <ResultScreen
+          sessionId={sessionId}
+          sampleData={sampleData}
+          onRestart={handleRestart}
+        />
       )}
     </>
   );

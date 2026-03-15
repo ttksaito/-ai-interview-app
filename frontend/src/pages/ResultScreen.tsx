@@ -5,10 +5,11 @@ import { api } from '../services/api';
 
 interface ResultScreenProps {
   sessionId: string;
+  sampleData?: AnalysisResult | null;
   onRestart: () => void;
 }
 
-const ResultScreen: React.FC<ResultScreenProps> = ({ sessionId, onRestart }) => {
+const ResultScreen: React.FC<ResultScreenProps> = ({ sessionId, sampleData, onRestart }) => {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -20,6 +21,20 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ sessionId, onRestart }) => 
     const fetchAnalysis = async () => {
       try {
         setIsLoading(true);
+
+        // If sample data is provided, use it directly
+        if (sampleData) {
+          setAnalysisResult(sampleData);
+          setIsLoading(false);
+          return;
+        }
+
+        // Otherwise, fetch from API
+        if (!sessionId) {
+          setError('セッションIDが見つかりません。');
+          setIsLoading(false);
+          return;
+        }
 
         // Poll for analysis result (it may still be processing in background)
         let result;
@@ -84,7 +99,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ sessionId, onRestart }) => 
     };
 
     fetchAnalysis();
-  }, [sessionId]);
+  }, [sessionId, sampleData]);
 
   const handleEvidenceClick = (evidence: string) => {
     // Remove all formatting markers to get clean text
@@ -225,7 +240,14 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ sessionId, onRestart }) => 
         <div className="max-w-full mx-auto px-2">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">分析結果</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold text-gray-800">分析結果</h1>
+                {sampleData && (
+                  <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full">
+                    サンプル
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-gray-600 mt-1">インタビュー内容の評価</p>
             </div>
             <div className="flex gap-2">
