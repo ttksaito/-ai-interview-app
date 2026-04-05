@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { SessionHistory, AnalysisResult, InterviewTheme } from '../types/index';
 import { api } from '../services/api';
 import { sampleData } from '../data/sampleData';
+import { sampleDataJobChange } from '../data/sampleDataJobChange';
 
 interface StartScreenProps {
   onStart: (theme: InterviewTheme) => void;
@@ -157,10 +158,10 @@ const StartScreen: React.FC<StartScreenProps> = ({ onStart, onViewHistory, onVie
             実際のインタビュー結果のサンプルを確認できます。どのような分析が行われるか事前に確認したい方はこちらをご覧ください。
           </p>
           <button
-            onClick={() => onViewSample(sampleData)}
+            onClick={() => onViewSample(selectedTheme === 'life-meaning' ? sampleData : sampleDataJobChange)}
             className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-md"
           >
-            サンプル分析結果を見る
+            サンプル分析結果を見る（{themeContent[selectedTheme].title}）
           </button>
         </div>
 
