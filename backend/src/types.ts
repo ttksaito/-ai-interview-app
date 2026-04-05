@@ -1,9 +1,23 @@
+export type InterviewTheme = 'life-meaning' | 'job-change';
+
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
 }
 
+export interface MessageAnalysis {
+  messageIndex: number;
+  categories: {
+    [key: string]: {
+      itemId: string;
+      evaluation: 1 | -1 | 0;
+      evidence: string;
+    }[];
+  };
+}
+
 export interface InterviewSession {
+  theme: InterviewTheme;
   chatHistory: Message[];
   isActive: boolean;
   costTracker: {
@@ -12,6 +26,7 @@ export interface InterviewSession {
   };
   createdAt: string;
   analysisResult?: AnalysisResult;
+  messageAnalyses?: MessageAnalysis[];
 }
 
 export interface AnalysisCategory {
@@ -41,6 +56,7 @@ export interface AnalysisResult {
 
 export interface SessionHistory {
   sessionId: string;
+  theme: InterviewTheme;
   createdAt: string;
   messageCount: number;
   isAnalyzed: boolean;

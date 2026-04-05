@@ -101,7 +101,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ sessionId, sampleData, onRe
     fetchAnalysis();
   }, [sessionId, sampleData]);
 
-  const handleEvidenceClick = (evidence: string) => {
+  const handleEvidenceClick = (evidence: string, messageIndex?: number) => {
     // Remove all formatting markers to get clean text
     const cleanText = evidence
       .replace(/【「(.+?)」と発言[^】]*】/g, '$1')
@@ -115,14 +115,8 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ sessionId, sampleData, onRe
 
     setHighlightedText(cleanText);
 
-    // Find the message containing the text and scroll to it (skip first message)
-    const messagesToSearch = analysisResult.messages.slice(1);
-    const messageIndex = messagesToSearch.findIndex((msg) =>
-      msg.content.includes(cleanText)
-    );
-
-    if (messageIndex !== -1 && transcriptRef.current) {
-      // Find the corresponding message element
+    // If messageIndex is provided, scroll directly to that message
+    if (messageIndex !== undefined && transcriptRef.current) {
       const messageElements = transcriptRef.current.querySelectorAll('[data-message-index]');
       const targetElement = messageElements[messageIndex] as HTMLElement;
 
@@ -131,6 +125,26 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ sessionId, sampleData, onRe
           behavior: 'smooth',
           block: 'center',
         });
+      }
+    } else {
+      // Fallback: Find the message containing the text and scroll to it
+      const messagesToSearch = analysisResult.messages.filter(
+        msg => msg.content !== 'インタビューを開始してください。'
+      );
+      const foundIndex = messagesToSearch.findIndex((msg) =>
+        msg.content.includes(cleanText)
+      );
+
+      if (foundIndex !== -1 && transcriptRef.current) {
+        const messageElements = transcriptRef.current.querySelectorAll('[data-message-index]');
+        const targetElement = messageElements[foundIndex] as HTMLElement;
+
+        if (targetElement) {
+          targetElement.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+          });
+        }
       }
     }
 
@@ -179,8 +193,10 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ sessionId, sampleData, onRe
       return <p className="text-gray-500 text-sm">トランスクリプトがありません</p>;
     }
 
-    // Skip the first message if it's the initial prompt
-    const messagesToDisplay = analysisResult.messages.slice(1);
+    // Filter out the internal start command message
+    const messagesToDisplay = analysisResult.messages.filter(
+      msg => msg.content !== 'インタビューを開始してください。'
+    );
 
     return (
       <div className="space-y-4">

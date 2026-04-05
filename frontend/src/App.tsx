@@ -3,7 +3,7 @@ import StartScreen from './pages/StartScreen';
 import InterviewScreen from './pages/InterviewScreen';
 import ResultScreen from './pages/ResultScreen';
 import { api } from './services/api';
-import type { AnalysisResult } from './types/index';
+import type { AnalysisResult, InterviewTheme } from './types/index';
 
 type AppScreen = 'start' | 'interview' | 'result';
 
@@ -13,9 +13,9 @@ function App() {
   const [initialMessage, setInitialMessage] = useState<string>('');
   const [sampleData, setSampleData] = useState<AnalysisResult | null>(null);
 
-  const handleStartInterview = async () => {
+  const handleStartInterview = async (theme: InterviewTheme) => {
     try {
-      const response = await api.startInterview();
+      const response = await api.startInterview(theme);
       setSessionId(response.sessionId);
       setInitialMessage(response.message);
       setSampleData(null);

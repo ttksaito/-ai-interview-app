@@ -4,7 +4,7 @@ import type { AnalysisCategory } from '../types/index';
 interface CategoryTableProps {
   categoryId: string;
   category: AnalysisCategory;
-  onEvidenceClick?: (evidence: string) => void;
+  onEvidenceClick?: (evidence: string, messageIndex?: number) => void;
 }
 
 const CategoryTable: React.FC<CategoryTableProps> = ({
@@ -111,7 +111,7 @@ const CategoryTable: React.FC<CategoryTableProps> = ({
                                   #{mention.messageIndex + 1}
                                 </span>
                                 <button
-                                  onClick={() => onEvidenceClick?.(mention.evidence)}
+                                  onClick={() => onEvidenceClick?.(mention.evidence, mention.messageIndex)}
                                   className="text-sm text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer text-left transition-colors flex-1"
                                 >
                                   {cleanEvidence(mention.evidence)}

@@ -1,3 +1,5 @@
+export type InterviewTheme = 'life-meaning' | 'job-change';
+
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -39,6 +41,7 @@ export interface AnalysisResult {
 
 export interface SessionHistory {
   sessionId: string;
+  theme: InterviewTheme;
   createdAt: string;
   messageCount: number;
   isAnalyzed: boolean;

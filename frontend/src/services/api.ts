@@ -1,4 +1,4 @@
-import type { Message, AnalysisResult, SessionHistory } from '../types/index';
+import type { Message, AnalysisResult, SessionHistory, InterviewTheme } from '../types/index';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
@@ -19,12 +19,13 @@ export interface SendMessageResponse {
 }
 
 export const api = {
-  async startInterview(): Promise<StartInterviewResponse> {
+  async startInterview(theme: InterviewTheme = 'life-meaning'): Promise<StartInterviewResponse> {
     const response = await fetch(`${API_BASE_URL}/interview/start`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify({ theme }),
     });
 
     if (!response.ok) {

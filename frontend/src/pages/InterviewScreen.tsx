@@ -113,14 +113,27 @@ const InterviewScreen: React.FC<InterviewScreenProps> = ({
         (msg) => msg.role === 'user' && msg.content !== 'インタビューを開始してください。'
       ).length;
 
-      console.log(`Starting incremental analysis for ${userMessageCount} messages`);
+      console.log(`Starting batch analysis for ${userMessageCount} messages`);
       setAnalyzingProgress({ current: 0, total: userMessageCount });
 
-      // Analyze each message one by one
-      for (let i = 0; i < userMessageCount; i++) {
-        console.log(`Analyzing message ${i + 1}/${userMessageCount}`);
-        await api.analyzeMessage(sessionId, i);
-        setAnalyzingProgress({ current: i + 1, total: userMessageCount });
+      // Analyze messages in batches (3 messages at a time)
+      const BATCH_SIZE = 3;
+      for (let i = 0; i < userMessageCount; i += BATCH_SIZE) {
+        const batchEnd = Math.min(i + BATCH_SIZE, userMessageCount);
+        console.log(`Analyzing batch: messages ${i + 1}-${batchEnd}/${userMessageCount}`);
+
+        // Create promises for this batch
+        const batchPromises = [];
+        for (let j = i; j < batchEnd; j++) {
+          batchPromises.push(api.analyzeMessage(sessionId, j));
+        }
+
+        // Wait for all messages in this batch to complete
+        await Promise.all(batchPromises);
+
+        // Update progress
+        setAnalyzingProgress({ current: batchEnd, total: userMessageCount });
+        console.log(`Batch complete: ${batchEnd}/${userMessageCount} messages analyzed`);
       }
 
       // Finalize the analysis
@@ -129,7 +142,7 @@ const InterviewScreen: React.FC<InterviewScreenProps> = ({
 
       console.log('Analysis completed successfully');
     } catch (error) {
-      console.error('Incremental analysis failed:', error);
+      console.error('Batch analysis failed:', error);
       throw error;
     } finally {
       setIsAnalyzing(false);

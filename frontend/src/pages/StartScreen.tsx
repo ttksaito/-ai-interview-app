@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import type { SessionHistory, AnalysisResult } from '../types/index';
+import type { SessionHistory, AnalysisResult, InterviewTheme } from '../types/index';
 import { api } from '../services/api';
 import { sampleData } from '../data/sampleData';
 
 interface StartScreenProps {
-  onStart: () => void;
+  onStart: (theme: InterviewTheme) => void;
   onViewHistory: (sessionId: string) => void;
   onViewSample: (data: AnalysisResult) => void;
 }
@@ -12,6 +12,7 @@ interface StartScreenProps {
 const StartScreen: React.FC<StartScreenProps> = ({ onStart, onViewHistory, onViewSample }) => {
   const [history, setHistory] = useState<SessionHistory[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [selectedTheme, setSelectedTheme] = useState<InterviewTheme>('life-meaning');
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -39,16 +40,60 @@ const StartScreen: React.FC<StartScreenProps> = ({ onStart, onViewHistory, onVie
     });
   };
 
+  const getThemeLabel = (theme: InterviewTheme) => {
+    return theme === 'life-meaning' ? '生きがい・人生の意味' : '転職理由';
+  };
+
+  const themeContent = {
+    'life-meaning': {
+      title: '生きがい・人生の意味',
+      description: 'このインタビューでは、あなたの「人生において意味や生きがいを感じる活動や経験」について、AIが質問形式でお話を伺います。',
+    },
+    'job-change': {
+      title: '転職理由',
+      description: 'このインタビューでは、転職を考えている理由や、転職に至った経緯について、AIが質問形式でお話を伺います。本質的な動機を整理するお手伝いをします。',
+    },
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="max-w-2xl w-full bg-white rounded-2xl shadow-xl p-8 md:p-12">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-800 mb-4">
-            生きがい・人生の意味
+            AIインタビュー
           </h1>
           <h2 className="text-xl text-gray-600">
-            AIインタビュー
+            {themeContent[selectedTheme].title}
           </h2>
+        </div>
+
+        {/* Theme Selection */}
+        <div className="mb-8 p-6 bg-gray-50 rounded-lg">
+          <h3 className="font-semibold text-gray-800 mb-4">インタビューテーマを選択</h3>
+          <div className="space-y-3">
+            <label className="flex items-center p-4 bg-white rounded-lg border-2 border-gray-200 cursor-pointer hover:border-indigo-300 transition">
+              <input
+                type="radio"
+                name="theme"
+                value="life-meaning"
+                checked={selectedTheme === 'life-meaning'}
+                onChange={() => setSelectedTheme('life-meaning')}
+                className="w-4 h-4 text-indigo-600"
+              />
+              <span className="ml-3 text-gray-700 font-medium">生きがい・人生の意味</span>
+            </label>
+            <label className="flex items-center p-4 bg-white rounded-lg border-2 border-gray-200 cursor-pointer hover:border-indigo-300 transition">
+              <input
+                type="radio"
+                name="theme"
+                value="job-change"
+                checked={selectedTheme === 'job-change'}
+                onChange={() => setSelectedTheme('job-change')}
+                className="w-4 h-4 text-indigo-600"
+              />
+              <span className="ml-3 text-gray-700 font-medium">転職理由</span>
+            </label>
+          </div>
         </div>
 
         <div className="space-y-6 mb-8">
@@ -60,8 +105,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onStart, onViewHistory, onVie
               インタビューについて
             </h3>
             <p className="text-gray-700 leading-relaxed">
-              このインタビューでは、あなたの<span className="font-semibold">「人生において意味や生きがいを感じる活動や経験」</span>について、
-              AIが質問形式でお話を伺います。
+              {themeContent[selectedTheme].description}
             </p>
           </div>
 
@@ -121,7 +165,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onStart, onViewHistory, onVie
         </div>
 
         <button
-          onClick={onStart}
+          onClick={() => onStart(selectedTheme)}
           className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 px-8 rounded-lg transition duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg"
         >
           インタビューを開始する
@@ -149,7 +193,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onStart, onViewHistory, onVie
                         {formatDate(item.createdAt)}
                       </p>
                       <p className="text-xs text-gray-500 mt-1">
-                        {item.messageCount}件の回答
+                        {getThemeLabel(item.theme)} • {item.messageCount}件の回答
                         {item.isAnalyzed ? ' • 分析済み' : ' • 未分析'}
                       </p>
                     </div>
