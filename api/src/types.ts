@@ -1,9 +1,23 @@
+export type InterviewTheme = 'life-meaning' | 'job-change';
+
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
 }
 
+export interface MessageAnalysis {
+  messageIndex: number;
+  categories: {
+    [key: string]: {
+      itemId: string;
+      evaluation: 1 | -1 | 0;
+      evidence: string;
+    }[];
+  };
+}
+
 export interface InterviewSession {
+  theme: InterviewTheme;
   chatHistory: Message[];
   isActive: boolean;
   costTracker: {
@@ -12,18 +26,7 @@ export interface InterviewSession {
   };
   createdAt: string;
   analysisResult?: AnalysisResult;
-  partialAnalysis?: Map<number, {
-    messageIndex: number;
-    messageContent: string;
-    categories: {
-      [categoryId: string]: Array<{
-        id: string;
-        item: string;
-        evaluation: 0 | 1 | -1;
-        evidence: string;
-      }>;
-    };
-  }>;
+  messageAnalyses?: MessageAnalysis[];
 }
 
 export interface AnalysisCategory {
@@ -33,19 +36,11 @@ export interface AnalysisCategory {
   negativeCount: number;
 }
 
-export interface AnalysisEvidence {
-  messageIndex: number; // Index of the user message (0-based, excluding initial prompt)
-  evaluation: 1 | -1; // 1: positive mention, -1: negative mention
-  evidence: string; // Extracted quote from the message
-  messageContent: string; // Full message content for context
-}
-
 export interface AnalysisItem {
   id: string;
   item: string;
-  mentions: AnalysisEvidence[]; // List of mentions across all messages
-  evaluation: 1 | -1 | 0; // Overall evaluation: 1 if any positive, -1 if any negative, 0 if none
-  evidence: string; // Combined evidence for backward compatibility
+  evaluation: 1 | -1 | 0; // 1: positive, -1: negative, 0: no mention
+  evidence: string;
 }
 
 export interface AnalysisResult {
@@ -61,6 +56,7 @@ export interface AnalysisResult {
 
 export interface SessionHistory {
   sessionId: string;
+  theme: InterviewTheme;
   createdAt: string;
   messageCount: number;
   isAnalyzed: boolean;

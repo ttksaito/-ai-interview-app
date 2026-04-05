@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { ClaudeService } from '../services/claudeService';
 import { AnalysisService } from '../services/analysisService';
-import { InterviewSession, Message, AnalysisResult } from '../types';
+import { InterviewSession, Message, InterviewTheme } from '../types';
 
 const router = Router();
 
@@ -14,10 +14,12 @@ const analysisService = new AnalysisService(process.env.ANTHROPIC_API_KEY || '')
 // Start a new interview session
 router.post('/start', async (req: Request, res: Response) => {
   try {
+    const { theme = 'life-meaning' } = req.body as { theme?: InterviewTheme };
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     // Initialize session
     const session: InterviewSession = {
+      theme: theme as InterviewTheme,
       chatHistory: [],
       isActive: true,
       costTracker: {
@@ -37,6 +39,7 @@ router.post('/start', async (req: Request, res: Response) => {
 
     const { response, inputTokens, outputTokens } = await claudeService.getResponse(
       session.chatHistory,
+      session.theme,
     );
 
     const aiMessage: Message = {
@@ -89,6 +92,7 @@ router.post('/message', async (req: Request, res: Response) => {
     // Get AI response
     const { response, inputTokens, outputTokens } = await claudeService.getResponse(
       session.chatHistory,
+      session.theme,
     );
 
     // Check for end codes
@@ -147,64 +151,8 @@ router.post('/end', async (req: Request, res: Response) => {
   }
 });
 
-// Analyze a single message (for incremental processing)
-router.post('/analyze-message', async (req: Request, res: Response) => {
-  try {
-    const { sessionId, messageIndex } = req.body;
-
-    if (!sessionId || messageIndex === undefined) {
-      return res.status(400).json({ error: 'sessionId and messageIndex are required' });
-    }
-
-    const session = sessions.get(sessionId);
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-
-    // Initialize partialAnalysis if not exists
-    if (!session.partialAnalysis) {
-      session.partialAnalysis = new Map();
-    }
-
-    // Get user messages (excluding the initial prompt)
-    const userMessages = session.chatHistory.filter(
-      (msg) => msg.role === 'user' && msg.content !== 'インタビューを開始してください。'
-    );
-
-    if (messageIndex < 0 || messageIndex >= userMessages.length) {
-      return res.status(400).json({ error: 'Invalid messageIndex' });
-    }
-
-    console.log(`Analyzing message ${messageIndex + 1}/${userMessages.length} with full conversation context`);
-
-    // Analyze the single message with full conversation context
-    const result = await analysisService.analyzeSingleMessage(session.chatHistory, messageIndex);
-
-    // Save to session
-    session.partialAnalysis.set(messageIndex, result);
-
-    // Check if all messages have been analyzed
-    const allAnalyzed = session.partialAnalysis.size === userMessages.length;
-
-    res.json({
-      success: true,
-      messageIndex,
-      totalMessages: userMessages.length,
-      analyzedCount: session.partialAnalysis.size,
-      allAnalyzed,
-      result,
-    });
-  } catch (error: any) {
-    console.error('Error analyzing message:', error);
-    res.status(500).json({
-      error: 'Failed to analyze message',
-      details: error.message,
-    });
-  }
-});
-
-// Finalize analysis from partial results
-router.post('/finalize-analysis', async (req: Request, res: Response) => {
+// Analyze interview results
+router.post('/analyze', async (req: Request, res: Response) => {
   try {
     const { sessionId } = req.body;
 
@@ -217,106 +165,32 @@ router.post('/finalize-analysis', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    if (!session.partialAnalysis || session.partialAnalysis.size === 0) {
-      return res.status(400).json({ error: 'No partial analysis results found' });
-    }
+    // Generate transcript (exclude the initial start command)
+    const transcript = session.chatHistory
+      .filter((msg) => msg.content !== 'インタビューを開始してください。')
+      .map((msg) => {
+        const role = msg.role === 'assistant' ? 'AI インタビュアー' : '回答者';
+        return `${role}: ${msg.content}`;
+      })
+      .join('\n\n');
 
-    console.log(`Finalizing analysis from ${session.partialAnalysis.size} partial results`);
-
-    // Convert Map to Array
-    const partialResults = Array.from(session.partialAnalysis.values());
-
-    // Aggregate into final result
-    const analysisResult = analysisService.aggregatePartialResults(
-      partialResults,
-      session.chatHistory,
-    );
-
-    // Save to session
-    session.analysisResult = analysisResult;
-
-    // Clear partial results to save memory
-    session.partialAnalysis = undefined;
-
-    res.json(analysisResult);
-  } catch (error: any) {
-    console.error('Error finalizing analysis:', error);
-    res.status(500).json({
-      error: 'Failed to finalize analysis',
-      details: error.message,
-    });
-  }
-});
-
-// Analyze interview results
-router.post('/analyze', async (req: Request, res: Response) => {
-  let sessionId: string | undefined;
-  let transcript: string | undefined;
-
-  try {
-    sessionId = req.body.sessionId;
-
-    if (!sessionId) {
-      return res.status(400).json({ error: 'sessionId is required' });
-    }
-
-    const session = sessions.get(sessionId);
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-
-    // Count user messages for logging
-    const userMessageCount = session.chatHistory.filter(
-      (msg) => msg.role === 'user' && msg.content !== 'インタビューを開始してください。'
-    ).length;
-
-    console.log(`Starting batch analysis for ${userMessageCount} user messages x 5 categories = ${userMessageCount * 5} API calls`);
-
-    // Analyze using the new batch method (processes messages x categories in parallel)
-    // This is much faster than the old single-transcript method and avoids timeout
-    const analysisResult = await Promise.race([
-      analysisService.analyzeMessagesBatch(session.chatHistory),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Analysis timeout')), 25000)
-      ),
-    ]);
-
-    transcript = (analysisResult as AnalysisResult).transcript;
+    // Analyze the transcript
+    const analysisResult = await analysisService.analyzeTranscript(transcript, session.theme);
 
     // Save analysis result to session
-    session.analysisResult = analysisResult as AnalysisResult;
+    session.analysisResult = analysisResult;
 
     res.json(analysisResult);
   } catch (error: any) {
-    const errorTimestamp = new Date().toISOString();
-    console.error(`[${errorTimestamp}] Error analyzing interview:`, {
-      sessionId,
-      errorMessage: error.message,
-      errorStack: error.stack,
-      transcriptLength: transcript?.length || 0,
-    });
-
-    // Check if it's a timeout error
-    if (error.message?.includes('timeout') || error.message?.includes('timed out')) {
-      return res.status(504).json({
-        error: 'Analysis timeout',
-        details: 'インタビューの分析に時間がかかりすぎています。インタビューを短くしてもう一度お試しください。',
-        transcriptLength: transcript?.length,
-      });
-    }
-
-    res.status(500).json({
-      error: 'Failed to analyze interview',
-      details: error.message,
-      transcriptLength: transcript?.length,
-    });
+    console.error('Error analyzing interview:', error);
+    res.status(500).json({ error: 'Failed to analyze interview', details: error.message });
   }
 });
 
 // Get interview transcript
 router.get('/transcript/:sessionId', (req: Request, res: Response) => {
   try {
-    const sessionId = req.params.sessionId as string;
+    const { sessionId } = req.params;
 
     const session = sessions.get(sessionId);
     if (!session) {
@@ -344,6 +218,7 @@ router.get('/history', (req: Request, res: Response) => {
     const history = Array.from(sessions.entries())
       .map(([sessionId, session]) => ({
         sessionId,
+        theme: session.theme,
         createdAt: session.createdAt,
         messageCount: session.chatHistory.filter(
           (msg) => msg.content !== 'インタビューを開始してください。'
@@ -362,7 +237,7 @@ router.get('/history', (req: Request, res: Response) => {
 // Get session by ID (for viewing past results)
 router.get('/session/:sessionId', (req: Request, res: Response) => {
   try {
-    const sessionId = req.params.sessionId as string;
+    const { sessionId } = req.params;
 
     const session = sessions.get(sessionId);
     if (!session) {
@@ -377,6 +252,110 @@ router.get('/session/:sessionId', (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error getting session:', error);
     res.status(500).json({ error: 'Failed to get session', details: error.message });
+  }
+});
+
+// Analyze a single message (incremental analysis)
+router.post('/analyze-message', async (req: Request, res: Response) => {
+  try {
+    const { sessionId, messageIndex } = req.body;
+
+    if (!sessionId || messageIndex === undefined) {
+      return res.status(400).json({ error: 'sessionId and messageIndex are required' });
+    }
+
+    const session = sessions.get(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Get user messages only (excluding initial prompt)
+    const userMessages = session.chatHistory.filter(
+      (msg) => msg.role === 'user' && msg.content !== 'インタビューを開始してください。'
+    );
+
+    if (messageIndex >= userMessages.length) {
+      return res.status(400).json({ error: 'Invalid message index' });
+    }
+
+    const targetMessage = userMessages[messageIndex];
+
+    // Get conversation context (all messages up to this point)
+    const targetMessageIndexInHistory = session.chatHistory.findIndex(
+      (msg) => msg === targetMessage
+    );
+    const conversationContext = session.chatHistory.slice(0, targetMessageIndexInHistory + 1);
+
+    // Analyze this specific message
+    const messageAnalysis = await analysisService.analyzeMessage(
+      conversationContext,
+      targetMessage,
+      messageIndex,
+      session.theme
+    );
+
+    // Initialize messageAnalyses array if not exists
+    if (!session.messageAnalyses) {
+      session.messageAnalyses = [];
+    }
+
+    // Store the analysis
+    session.messageAnalyses.push(messageAnalysis);
+
+    res.json({
+      success: true,
+      messageIndex,
+      totalMessages: userMessages.length,
+      analyzedCount: session.messageAnalyses.length,
+      allAnalyzed: session.messageAnalyses.length === userMessages.length,
+    });
+  } catch (error: any) {
+    console.error('Error analyzing message:', error);
+    res.status(500).json({ error: 'Failed to analyze message', details: error.message });
+  }
+});
+
+// Finalize analysis (aggregate all message analyses)
+router.post('/finalize-analysis', async (req: Request, res: Response) => {
+  try {
+    const { sessionId } = req.body;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    const session = sessions.get(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    if (!session.messageAnalyses || session.messageAnalyses.length === 0) {
+      return res.status(400).json({ error: 'No message analyses found. Run analyze-message first.' });
+    }
+
+    // Generate transcript
+    const transcript = session.chatHistory
+      .filter((msg) => msg.content !== 'インタビューを開始してください。')
+      .map((msg) => {
+        const role = msg.role === 'assistant' ? 'AI インタビュアー' : '回答者';
+        return `${role}: ${msg.content}`;
+      })
+      .join('\n\n');
+
+    // Aggregate all message analyses
+    const analysisResult = analysisService.aggregateMessageAnalyses(
+      session.messageAnalyses,
+      session.theme,
+      transcript
+    );
+
+    // Save to session
+    session.analysisResult = analysisResult;
+
+    res.json(analysisResult);
+  } catch (error: any) {
+    console.error('Error finalizing analysis:', error);
+    res.status(500).json({ error: 'Failed to finalize analysis', details: error.message });
   }
 });
 
