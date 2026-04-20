@@ -1,9 +1,8 @@
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 
-// Load environment variables
-dotenv.config();
+// Environment variables are automatically loaded by Vercel
+// No need for dotenv in production
 
 // Import the router from local src directory
 import interviewRouter from './src/routes/interview';

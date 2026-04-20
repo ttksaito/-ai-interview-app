@@ -522,9 +522,7 @@ export class AnalysisService {
             // Update evaluation (later messages override earlier ones if conflicting)
             if (item.evaluation !== 0) {
               // Keep the most recent evaluation (positive or negative)
-              if (allItems[item.itemId].evaluation === 0 || item.evaluation !== 0) {
-                allItems[item.itemId].evaluation = item.evaluation;
-              }
+              allItems[item.itemId].evaluation = item.evaluation;
 
               if (item.evidence && item.evidence !== 'なし') {
                 // Format evidence with proper markers

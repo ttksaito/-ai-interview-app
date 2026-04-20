@@ -41,6 +41,12 @@ export interface AnalysisItem {
   item: string;
   evaluation: 1 | -1 | 0; // 1: positive, -1: negative, 0: no mention
   evidence: string;
+  mentions?: {
+    messageIndex: number;
+    evaluation: 1 | -1 | 0;
+    evidence: string;
+    messageContent: string;
+  }[];
 }
 
 export interface AnalysisResult {
