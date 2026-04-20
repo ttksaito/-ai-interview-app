@@ -21,7 +21,16 @@ app.use('/api/interview', interviewRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'API is running on Vercel' });
+  res.json({
+    status: 'ok',
+    message: 'API is running on Vercel',
+    env: {
+      SUPABASE_URL: !!process.env.SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY,
+      FRONTEND_URL: !!process.env.FRONTEND_URL,
+    }
+  });
 });
 
 // Error handling middleware
