@@ -1,6 +1,8 @@
 import type { Message, AnalysisResult, SessionHistory, InterviewTheme } from '../types/index';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+const SUPABASE_FUNCTIONS_URL = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL || '';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 export interface StartInterviewResponse {
   sessionId: string;
@@ -66,11 +68,22 @@ export const api = {
   },
 
   async analyzeInterview(sessionId: string): Promise<AnalysisResult> {
-    const response = await fetch(`${API_BASE_URL}/interview/analyze`, {
+    // Use Supabase Edge Functions for analysis (better timeout handling)
+    const url = SUPABASE_FUNCTIONS_URL
+      ? `${SUPABASE_FUNCTIONS_URL}/analyze`
+      : `${API_BASE_URL}/interview/analyze`; // Fallback to Vercel
+
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+
+    if (SUPABASE_FUNCTIONS_URL && SUPABASE_ANON_KEY) {
+      headers['Authorization'] = `Bearer ${SUPABASE_ANON_KEY}`;
+    }
+
+    const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({ sessionId }),
     });
 
@@ -82,7 +95,7 @@ export const api = {
         throw new Error('Analysis timed out - interview may be too long');
       }
 
-      throw new Error(errorData.details || 'Failed to analyze interview');
+      throw new Error(errorData.error || errorData.details || 'Failed to analyze interview');
     }
 
     return response.json();
@@ -98,34 +111,56 @@ export const api = {
     analyzedCount: number;
     allAnalyzed: boolean;
   }> {
-    const response = await fetch(`${API_BASE_URL}/interview/analyze-message`, {
+    // Use Supabase Edge Functions for analysis (better timeout handling)
+    const url = SUPABASE_FUNCTIONS_URL
+      ? `${SUPABASE_FUNCTIONS_URL}/analyze-message`
+      : `${API_BASE_URL}/interview/analyze-message`; // Fallback to Vercel
+
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+
+    if (SUPABASE_FUNCTIONS_URL && SUPABASE_ANON_KEY) {
+      headers['Authorization'] = `Bearer ${SUPABASE_ANON_KEY}`;
+    }
+
+    const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({ sessionId, messageIndex }),
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.details || 'Failed to analyze message');
+      throw new Error(errorData.error || errorData.details || 'Failed to analyze message');
     }
 
     return response.json();
   },
 
   async finalizeAnalysis(sessionId: string): Promise<AnalysisResult> {
-    const response = await fetch(`${API_BASE_URL}/interview/finalize-analysis`, {
+    // Use Supabase Edge Functions for analysis (better timeout handling)
+    const url = SUPABASE_FUNCTIONS_URL
+      ? `${SUPABASE_FUNCTIONS_URL}/finalize-analysis`
+      : `${API_BASE_URL}/interview/finalize-analysis`; // Fallback to Vercel
+
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+
+    if (SUPABASE_FUNCTIONS_URL && SUPABASE_ANON_KEY) {
+      headers['Authorization'] = `Bearer ${SUPABASE_ANON_KEY}`;
+    }
+
+    const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({ sessionId }),
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.details || 'Failed to finalize analysis');
+      throw new Error(errorData.error || errorData.details || 'Failed to finalize analysis');
     }
 
     return response.json();
